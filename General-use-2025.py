@@ -102,6 +102,61 @@ TAX_DATA = {
                 ]
             },
             "description": "Progressive tax with brackets based on filing status"
+        },
+        
+        # NEW STATES ADDED BELOW
+        
+        # Massachusetts - Two bracket system
+        "massachusetts": {
+            "type": "bracket",
+            "name": "Massachusetts",
+            "single": {
+                "standard_deduction": 0,  # Massachusetts doesn't use a standard deduction in this model
+                "brackets": [
+                    (0, 1083150, 0.05),
+                    (1083150, float('inf'), 0.09)
+                ]
+            },
+            "joint": {
+                "standard_deduction": 0,  # Massachusetts doesn't use a standard deduction in this model
+                "brackets": [
+                    (0, 1083150, 0.05),
+                    (1083150, float('inf'), 0.09)
+                ]
+            },
+            "description": "5% for incomes $1,083,150 or less, 9% for incomes over $1,083,150"
+        },
+        
+        # Maine - Progressive bracket system
+        "maine": {
+            "type": "bracket",
+            "name": "Maine",
+            "single": {
+                "standard_deduction": 15000,
+                "brackets": [
+                    (0, 26800, 0.058),
+                    (26800, 63450, 0.0675),
+                    (63450, float('inf'), 0.0715)
+                ]
+            },
+            "joint": {
+                "standard_deduction": 30000,
+                "brackets": [
+                    (0, 53600, 0.058),
+                    (53600, 126900, 0.0675),
+                    (126900, float('inf'), 0.0715)
+                ]
+            },
+            "description": "Progressive tax with brackets based on filing status"
+        },
+        
+        # Louisiana - Flat tax system with standard deduction
+        "louisiana": {
+            "type": "flat",
+            "name": "Louisiana",
+            "rate": 0.03,  # 3%
+            "standard_deduction": 15000,  # Adding standard deduction property
+            "description": "Flat rate of 3% with $15,000 standard deduction"
         }
     }
 }
@@ -282,7 +337,11 @@ def calculate_state_tax(income1, income2=0, filing_status="single", state_code="
     
     # Handle flat tax states
     if state_data["type"] == "flat":
-        state_tax = total_income * state_data["rate"]
+        # Handle standard deduction if present (for Louisiana)
+        state_standard_deduction = state_data.get("standard_deduction", 0)
+        taxable_income = max(0, total_income - state_standard_deduction)
+        
+        state_tax = taxable_income * state_data["rate"]
         
         # Add flat fee if applicable
         flat_fee = state_data.get("flat_fee", 0)
@@ -294,6 +353,8 @@ def calculate_state_tax(income1, income2=0, filing_status="single", state_code="
             "state": state_name,
             "type": "flat",
             "rate": state_data["rate"] * 100,
+            "standard_deduction": state_standard_deduction,  # Added for Louisiana
+            "taxable_income": taxable_income,  # Added for Louisiana
             "tax": total_state_tax,
             "flat_fee": flat_fee,
             "effective_rate": effective_rate,
@@ -411,8 +472,10 @@ def get_state_options():
             
         if data["type"] == "flat":
             rate_info = f"({data['rate']*100:.2f}%)"
+            if "standard_deduction" in data:
+                rate_info = f"({data['rate']*100:.2f}% with ${data['standard_deduction']:,} deduction)"
             if "flat_fee" in data:
-                rate_info = f"({data['rate']*100:.2f}% + ${data['flat_fee']})"
+                rate_info += f" + ${data['flat_fee']}"
             options.append((code, f"{data['name']} {rate_info}"))
             
         elif data["type"] == "composite":
@@ -523,6 +586,11 @@ def display_tax_report(tax_data):
             print(f"Tax Type: Flat Rate")
             print(f"Flat Tax Rate: {format_percent(state['rate'])}")
             print(f"Gross Income: {format_currency(federal['gross_income'])}")
+            
+            # Handle standard deduction for flat tax states (like Louisiana)
+            if state.get("standard_deduction", 0) > 0:
+                print(f"Standard Deduction: -{format_currency(state['standard_deduction'])}")
+                print(f"Taxable Income: {format_currency(state['taxable_income'])}")
             
             if state.get("flat_fee", 0) > 0:
                 print(f"Additional Fee: {format_currency(state['flat_fee'])}")
